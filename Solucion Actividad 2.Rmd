@@ -1,0 +1,290 @@
+---
+title: "Actividad 2"
+author: 'Lote 34 Equipo 4: Jennifer Tatiana Gutierrez Lizarazo, Angela Patricia Cadena
+  Ramírez, Ciro Antonio Medina Barrera'
+date: "2025-04-19"
+output:
+  html_document: default
+  word_document: default
+---
+
+Importar librerías 
+
+```{r}
+library(readr) # Leer datos
+library(tidyverse) #Manejo y graficado de datos
+library(ConvergenceClubs) 
+```
+
+Importar data
+```{r}
+data <- read_csv("dataset_provincias.csv")
+# view(data) # Mostrar data
+
+# Eliminar la primera columna
+data <- data %>%
+  select(-1)
+```
+
+# 1. ¿De qué tipo de variables se compone el dataset? Realiza una representación gráfica que permita conocer el comportamiento de la serie temporal de las ventas de cigarrillos en cada una de las provincias. Describe brevemente los hallazgos más relevantes tras este conocimiento inicial.
+
+```{r}
+summary(data)
+```
+```{r}
+data %>%
+  ggplot( aes(x= fecha, y= Unidades))+
+  geom_line(color="#0098cd")+
+  facet_wrap(~Provincias)+
+  labs(title = "Ventas de cigarrillos por provincias")
+```
+
+**Respuesta:**
+
+- La variable `Provincias` es tipo carácter, la variable `fecha` es tipo  Date, el resto de las variables son tipo número.
+
+- las provincias que presentan mayores ventas son Madrid y Barcelona.
+
+- La provincia Girona presenta un compartimento aparentemente estacionario 
+
+
+# 2. Haz una representación gráfica que permita conocer, de forma ordenada, cuál es el ranking de las provincias de más a menos venta (toma como referencia la media de UdesxCapita).
+
+```{r}
+data %>%
+  filter(!is.na(Provincias)) %>%
+  group_by(Provincias) %>%
+  summarise(avg_UndesxCapita = mean(UdesxCapita, na.rm =TRUE)) %>%
+  ggplot(aes( x= avg_UndesxCapita, y= reorder(x=Provincias, avg_UndesxCapita)))+
+  geom_col()+
+  labs(title = "Ventas de cigarrillos por provincias")+
+  ylab("Proviancias")+
+  xlab("Ventas percapital")
+```
+
+**Comentarios:**
+
+- La provincia con más ventas es Girona
+
+- la provincia con menor venta es Cadiz
+
+
+
+# 3.	La dirección general quiere llevar a cabo acciones diferenciadas en las distintas provincias españolas. Por ello, se le pregunta, ¿podemos decir que existe convergencia absoluta (las ventas por provincia se comportan de manera homogénea) en las ventas de cigarrillos? En base a los resultados alcanzados, ¿qué podemos contestar a la dirección general? ¿Se pueden llevar a cabo acciones diferenciadas?
+
+```{r}
+#validar valores faltantes
+sum(is.na(data$Provincias))
+
+```
+## para este análisis se toma la variable Unidades, dado que esta es la que representa las ventas en cajetillas de cigarrillos.
+
+
+```{r}
+# la librería requiere pasar de formato "long" o largo a "wide" ancho
+data_wide <- data %>% 
+  pivot_wider(id_cols = c(Provincias), # Se coloca la c para crear vectores
+    names_from = fecha, values_from = Unidades)
+```
+
+
+Posteriormente se dispone a aplicar logaritmos para suavizar la serie temporal, menos la la columna 1 o columna de provincias.
+
+```{r}
+#Se aplica el log a todo el dataframe menos a la primera columna
+log_ <- log(data_wide[,-1])
+
+#Une la variable proviancias al dataframe log
+log_wide <- data.frame(provincias= data_wide[,1], log_)
+
+# se fija la columna provincias como indice para identificar mejor los clubs de convergencia
+row.names(log_wide) <- log_wide[,1]
+
+# Eliminar valores faltantes
+log_wide <- drop_na(log_wide)
+```
+
+## Prurba de convergencia apsoluta 
+Nota: l primera columna no se tiene en cuenta para el análisis  
+
+La función computeH calcula el exponente de Hurst (H) para cada columna. Este valor (entre 0 y 1) mide:
+
+- H ≈ 0.5: Comportamiento aleatorio (ej: acciones).
+
+- H > 0.5: Persistencia (ej: tendencias fuertes en ventas).
+
+- H < 0.5: Anti-persistencia (ej: fluctuaciones erráticas).
+
+
+- `time_trim = 1/3>` Recorta el primer tercio, de los datos para reducir el ruido "En este caso, 1/3 indica que se eliminará el 33% de los puntos en ambos extremos al ajustar el modelo."
+- Emplea FQSB (método robusto) para corregir autocorrelación y heterocasticidad
+
+**Este modelo realiza un contraste entre:**
+
+$Ho$ Las series presentan convergencia absoluta
+
+$Ha$ Las series no presentan convergencia absoluta
+
+```{r}
+# Paso 1: Calculamos el exponente de Hurst
+H <- computeH(log_wide[,-1],quantity = "H")
+
+# Paso 2: Estimamos el modelo de convergencia.
+round(estimateMod(H,time_trim = 1/3, HACmethod = "FQSB"),3)
+```
+
+**Respuesta:**
+
+- Dado su $P−value$ se rechaza la hipótesis nula, por lo tanto, se puede afirmar estadísticamente que no existe convergencia absoluta
+
+- No se puede llevar a cabo una dirección general en cuanto a la estrategias de ventas para todas las provincias, se requiere segmentar las provincias para hallar similitudes en el comportamiento de ventas.
+
+
+# 4	¿En el caso de que no exista convergencia absoluta, en cuántos grupos (clubes) podemos dividir las provincias en función al comportamiento de las series temporales? ¿Existe algún patrón de comportamiento geográfico y/o relacionado con el ranking elaborado en el segundo apartado?
+
+CLUBES DE CONVERGENCIA
+
+```{r}
+clubsprovincias <- findClubs(log_wide,
+                         dataCol = 2:205, # toma de la columna 2 hasta la 205 "la 1 es la que tiene los nombres"
+                         unit_names = 1, # Señala la comuna con los nombres (Provincias)
+                         refCol = 205,  # Usa la última columna, como referencia para ordenar las unidades.
+                         time_trim = 1/3, # elimina el 33% de los datos en los extremos
+                         cstar = 0,  # Unidades con comportamiento similar al promedio del grupo de referencia se incluyen en el primer club
+                         HACmethod = "FQSB") #corregir auto correlación y heterosexualidad en las regresiones
+```
+
+resumen de lo culbs
+
+```{r}
+summary(clubsprovincias)
+print(clubsprovincias) # Mostrar el desglosar de los blups
+```
+
+```{r}
+plot(clubsprovincias, avgTP = FALSE, nrows = 3, ncols = 3, plot_args = list(type='l'))
+```
+
+Gráfica de las tendencias de las provincias
+```{r}
+plot(clubsprovincias, clubs = NULL, avgTP = TRUE, legend = TRUE, plot_args = list(type='o'))
+```
+
+
+```{r}
+mcclubsprovincias <- mergeClubs(clubsprovincias,
+                            mergeMethod = 'PS',
+                            threshold = -1.65,
+                            mergeDivergent = FALSE)
+
+summary(mcclubsprovincias)
+print(mcclubsprovincias)
+```
+```{r}
+#gráfica de clubes
+plot(mcclubsprovincias, clubs = NULL, avgTP = TRUE, legend = TRUE, plot_args = list(type='o'))
+```
+Al aplicar el método de merge, se redujeron los clubs de 9 a 7.
+
+```{r}
+# Obtener las proviancias de clubs
+clubsprovincias$club9
+```
+
+**Respuesta:**
+
+1. la segmentación de provincias se puede realizar en 6 clubs.
+2. Respecto al comportamiento de los clustes/clubs de convergencia el grupo dos acoge a varias de las series con un mayor ranking.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
