@@ -32,6 +32,7 @@ data <- data %>%
 summary(data)
 ```
 
+
 ```{r}
 data %>%
   ggplot( aes(x= fecha, y= Unidades))+
@@ -191,12 +192,17 @@ Al aplicar el método de merge, se redujeron los clubs de 9 a 7.
 ```{r}
 # Obtener las proviancias del club 7
 mcclubsprovincias$club1
+
+# Obtener las proviancias de clubs
+clubsprovincias$club9
+
 ```
 
 **Respuesta:**
 
 1. la segmentación de provincias se puede realizar en 6 clubs.
 2. Respecto al comportamiento de los clustes/clubs de convergencia el grupo dos acoge a varias de las series con un mayor ranking.  
+
 
 
 
@@ -342,10 +348,6 @@ Revisar loe errores del modelo
 ```{r}
 checkresiduals(modelo_arima_Granada)
 ```
-
-
-
-
 ## Forecast Cantabria club_5
 
 ```{r}
@@ -438,13 +440,9 @@ checkresiduals(modelo_arima_Palencia)
 ```
 
 
-
-
 **Respuesta**
 
 Existen clubes cuyas series temporales presentan una mayor facilidad de predicción. Al analizar los errores residuales de los modelos estimados mediante la prueba de Ljung-Box, se observa que la serie temporal de Murcia (club 3) cumple con el supuesto de independencia en los errores, lo que indica que el modelo está capturando adecuadamente los patrones subyacentes de la serie. En contraste, las series temporales de Granada (club 4) no cumplen con este supuesto, evidenciando la presencia de autocorrelación en los residuos y sugiriendo que el modelo no logra representar completamente la dinámica de la serie.
-
-
 
 
 
